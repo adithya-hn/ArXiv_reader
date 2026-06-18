@@ -14,20 +14,10 @@ const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/
 let pdfjsLibPromise = null;
 function getPdfjsLib() {
   if (!pdfjsLibPromise) {
-    pdfjsLibPromise = (async () => {
-      const lib = await import(PDFJS_URL);
-      try {
-        // Safari is strict about loading a Worker script from a different
-        // origin; fetching the script ourselves and handing pdf.js a same-
-        // origin Blob URL sidesteps that reliably.
-        const workerCode = await fetch(PDFJS_WORKER_URL).then((r) => r.text());
-        const blobUrl = URL.createObjectURL(new Blob([workerCode], { type: "text/javascript" }));
-        lib.GlobalWorkerOptions.workerSrc = blobUrl;
-      } catch {
-        lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
-      }
+    pdfjsLibPromise = import(PDFJS_URL).then((lib) => {
+      lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
       return lib;
-    })();
+    });
   }
   return pdfjsLibPromise;
 }
@@ -51,7 +41,7 @@ function el(id) {
  * a plain external link in that case.
  */
 export async function downloadPdf(paper) {
-  const blob = await corsFetch(paper.pdfUrl, { as: "blob", tryDirect: true });
+  const blob = await corsFetch(paper.pdfUrl, { as: "blob" });
   await db.savePdfBlob(paper.id, blob);
   return blob;
 }
@@ -62,7 +52,6 @@ async function loadPdfDocument(paper) {
     blob = await downloadPdf(paper); // throws if it can't be fetched (e.g. CORS)
   }
   const buf = await blob.arrayBuffer();
-  const pdfjsLib = await getPdfjsLib();
   return pdfjsLib.getDocument({ data: buf }).promise;
 }
 
@@ -106,28 +95,16 @@ export async function openReader(paper) {
   try {
     state.pdf = await loadPdfDocument(paper);
   } catch (err) {
-    showFallback(paper, err);
+    el("reader-status").hidden = true;
+    el("reader-fallback").hidden = false;
+    el("reader-fallback-link").href = paper.pdfUrl;
     return;
   }
 
   el("reader-status").hidden = true;
   el("reader-toolbar").hidden = false;
-  try {
-    await renderAllPages();
-    setupPageTracking();
-  } catch (err) {
-    el("reader-toolbar").hidden = true;
-    showFallback(paper, err);
-  }
-}
-
-function showFallback(paper, err) {
-  console.error("Daily arXiv reader error:", err);
-  el("reader-status").hidden = true;
-  el("reader-fallback").hidden = false;
-  el("reader-fallback-link").href = paper.pdfUrl;
-  const detail = el("reader-fallback-detail");
-  if (detail) detail.textContent = err && err.message ? err.message : "";
+  await renderAllPages();
+  setupPageTracking();
 }
 
 export function closeReader() {

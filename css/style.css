@@ -271,23 +271,6 @@ main {
   overflow: visible;
 }
 
-.card-title, .card-abstract { cursor: pointer; }
-
-.abstract-hint {
-  display: block;
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--corona);
-  margin: -2px 0 10px;
-}
-
-.abstract-hint-less { display: none; }
-.paper-card.expanded .abstract-hint-more { display: none; }
-.paper-card.expanded .abstract-hint-less { display: block; }
-
 .card-actions {
   display: flex;
   align-items: center;
