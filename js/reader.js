@@ -6,6 +6,7 @@
 // hiccup only affects the reader feature, not the whole app.
 
 import * as db from "./db.js";
+import { corsFetch } from "./cors.js";
 
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs";
 const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs";
@@ -40,9 +41,7 @@ function el(id) {
  * a plain external link in that case.
  */
 export async function downloadPdf(paper) {
-  const res = await fetch(paper.pdfUrl, { mode: "cors" });
-  if (!res.ok) throw new Error(`PDF fetch failed: ${res.status}`);
-  const blob = await res.blob();
+  const blob = await corsFetch(paper.pdfUrl, { as: "blob" });
   await db.savePdfBlob(paper.id, blob);
   return blob;
 }

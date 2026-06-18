@@ -2,6 +2,8 @@
 // Talks to the public arXiv API (export.arxiv.org) and parses its Atom feed
 // into plain objects the rest of the app can use.
 
+import { corsFetch } from "./cors.js";
+
 const API_BASE = "https://export.arxiv.org/api/query";
 
 // arXiv asks API clients not to hammer the endpoint. We keep a tiny queue
@@ -20,11 +22,7 @@ async function throttledFetch(url) {
     await wait(MIN_GAP_MS - elapsed);
   }
   lastRequestAt = Date.now();
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`arXiv API responded with ${res.status}`);
-  }
-  return res.text();
+  return corsFetch(url, { as: "text" });
 }
 
 function text(node, tag) {
