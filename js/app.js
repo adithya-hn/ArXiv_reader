@@ -94,7 +94,9 @@ async function renderPaperCard(paper) {
     </div>
     <h3 class="card-title" data-action="toggle-abstract">${paper.title}</h3>
     <p class="card-byline">${fmtAuthors(paper.authors)} · ${fmtDate(paper.published)}</p>
-    <p class="card-abstract">${paper.summary}</p>
+    <p class="card-abstract" data-action="toggle-abstract">${paper.summary}</p>
+    <button class="abstract-hint abstract-hint-more" data-action="toggle-abstract">Show full abstract ▾</button>
+    <button class="abstract-hint abstract-hint-less" data-action="toggle-abstract">Show less ▴</button>
     <div class="card-actions">${await buildCardActions(paper)}</div>
   `;
   return card;
@@ -350,7 +352,9 @@ async function renderLibraryCard(paper) {
     </div>
     <h3 class="card-title" data-action="toggle-abstract">${paper.title}</h3>
     <p class="card-byline">${fmtAuthors(paper.authors)} · ${fmtDate(paper.published)}</p>
-    <p class="card-abstract">${paper.summary}</p>
+    <p class="card-abstract" data-action="toggle-abstract">${paper.summary}</p>
+    <button class="abstract-hint abstract-hint-more" data-action="toggle-abstract">Show full abstract ▾</button>
+    <button class="abstract-hint abstract-hint-less" data-action="toggle-abstract">Show less ▴</button>
     <div class="card-actions">
       <button class="btn btn-primary btn-read" data-action="read" data-id="${paper.id}">Read</button>
       <button class="btn btn-ghost" data-action="remove" data-id="${paper.id}">Remove</button>
