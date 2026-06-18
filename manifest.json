@@ -1,0 +1,16 @@
+{
+  "name": "Daily arXiv Reader",
+  "short_name": "Daily arXiv",
+  "description": "A daily arXiv reader with category feeds, search, an offline library, and Apple Pencil annotation.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14181b",
+  "theme_color": "#14181b",
+  "orientation": "any",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

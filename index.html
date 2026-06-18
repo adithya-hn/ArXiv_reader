@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Daily arXiv</title>
+<meta name="theme-color" content="#14181b">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/favicon-32.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Daily arXiv">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-row">
+    <h1 class="app-title">Daily <span class="dot">arXiv</span></h1>
+    <span class="app-subtitle">astro-ph.SR &amp; beyond</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== TODAY ===================== -->
+  <section class="view active" id="view-today">
+    <div class="chip-row" id="today-chips"></div>
+    <div class="feed-meta">
+      <span class="feed-meta-text" id="today-updated"></span>
+      <div>
+        <button class="icon-btn" id="today-add-category-btn" title="Add category">+ Category</button>
+        <button class="icon-btn" id="today-refresh-btn" title="Refresh">⟳</button>
+      </div>
+    </div>
+    <div class="scroll-area">
+      <div id="today-feed-list"></div>
+      <div class="empty-state" id="today-empty" hidden>
+        <strong>Nothing here yet</strong>
+        Tap refresh, or try a different category above.
+      </div>
+      <button class="btn btn-ghost btn-block" id="today-load-more-btn">Load more</button>
+    </div>
+  </section>
+
+  <!-- ===================== SEARCH ===================== -->
+  <section class="view" id="view-search">
+    <div class="search-bar">
+      <input type="search" class="search-input" id="search-input" placeholder="Search title, abstract, or author…">
+      <div class="search-row">
+        <select class="search-select" id="search-category-select"></select>
+        <select class="search-select" id="search-sort-select">
+          <option value="relevance">Best match</option>
+          <option value="newest">Newest first</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-block" id="search-go-btn">Search</button>
+    </div>
+    <div class="scroll-area">
+      <div id="search-results"></div>
+      <div class="empty-state" id="search-empty" hidden>
+        <strong>No matches</strong>
+        Try fewer or different keywords.
+      </div>
+      <button class="btn btn-ghost btn-block" id="search-load-more-btn" hidden>Load more</button>
+    </div>
+  </section>
+
+  <!-- ===================== LIBRARY ===================== -->
+  <section class="view" id="view-library">
+    <div class="library-filters">
+      <button class="library-filter-chip active" data-filter="all">All</button>
+      <button class="library-filter-chip" data-filter="downloaded">Offline ready</button>
+      <button class="library-filter-chip" data-filter="notes">Has notes</button>
+    </div>
+    <div class="library-toolbar">
+      <button class="btn btn-ghost" id="library-export-btn">Export backup</button>
+      <label class="btn btn-ghost" for="library-import-input">Import backup</label>
+      <input type="file" accept="application/json" id="library-import-input" class="visually-hidden">
+    </div>
+    <div class="scroll-area">
+      <div id="library-list"></div>
+      <div class="empty-state" id="library-empty" hidden>
+        <strong>Your library is empty</strong>
+        Save or download papers from Today or Search and they'll show up here.
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== READER (full-screen overlay) ===================== -->
+  <section id="view-reader">
+    <div class="reader-topbar">
+      <button class="icon-btn" id="reader-back-btn">‹ Back</button>
+      <div class="reader-titles">
+        <h2 id="reader-title"></h2>
+        <p id="reader-byline"></p>
+      </div>
+      <span id="reader-page-indicator" data-current="1"></span>
+      <button class="icon-btn" id="reader-notes-toggle-btn" title="Notes">Notes</button>
+    </div>
+    <div class="reader-body">
+      <div id="reader-pages">
+        <div id="reader-status" hidden>Loading…</div>
+        <div id="reader-fallback" hidden>
+          <strong>Couldn't open the PDF here</strong>
+          <p>Your browser blocked in-app loading for this file. You can still read it in Safari — Apple Pencil markup works there too, it just won't be saved into this app's notes.</p>
+          <a class="btn btn-primary" id="reader-fallback-link" target="_blank" rel="noopener">Open PDF in Safari</a>
+        </div>
+      </div>
+
+      <div class="reader-toolbar" id="reader-toolbar" hidden>
+        <button class="tool-btn active" data-tool="pen" title="Pen">✎</button>
+        <button class="tool-btn" data-tool="highlighter" title="Highlighter">▮</button>
+        <button class="tool-btn" data-tool="eraser" title="Eraser">⌫</button>
+        <div class="toolbar-divider"></div>
+        <button class="color-btn active" data-color="#E8A33D" style="background:#E8A33D" title="Amber"></button>
+        <button class="color-btn" data-color="#5B8C9E" style="background:#5B8C9E" title="Blue"></button>
+        <button class="color-btn" data-color="#C2542F" style="background:#C2542F" title="Red"></button>
+        <button class="color-btn" data-color="#6F9C6F" style="background:#6F9C6F" title="Green"></button>
+        <div class="toolbar-divider"></div>
+        <button class="tool-btn" id="reader-undo-btn" title="Undo">↶</button>
+        <button class="tool-btn" id="reader-clear-btn" title="Clear page">␡</button>
+        <label class="finger-toggle-label">
+          <input type="checkbox" id="reader-finger-toggle">
+          Finger
+        </label>
+      </div>
+
+      <div class="reader-notes-panel" id="reader-notes-panel">
+        <div class="reader-notes-panel-header">
+          <h3>Notes</h3>
+          <button class="icon-btn" id="reader-notes-close-btn">✕</button>
+        </div>
+        <textarea id="reader-notes-textarea" placeholder="Thoughts, questions, things to follow up on…"></textarea>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-tab="today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    Today
+  </button>
+  <button class="tab-btn" data-tab="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    Search
+  </button>
+  <button class="tab-btn" data-tab="library">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    Library
+  </button>
+</nav>
+
+<div class="modal" id="category-modal">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>Categories</h2>
+      <button class="icon-btn" id="category-modal-close">Done</button>
+    </div>
+    <input type="search" class="search-input" id="category-modal-search" placeholder="Search categories…">
+    <div class="modal-body" id="category-modal-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
