@@ -4,7 +4,7 @@
 // separately in IndexedDB (see js/db.js) — this worker only deals with the
 // files that make up the app itself.
 
-const CACHE_NAME = "daily-arxiv-shell-v1";
+const CACHE_NAME = "daily-arxiv-shell-v2";
 
 const SHELL_ASSETS = [
   "./",
