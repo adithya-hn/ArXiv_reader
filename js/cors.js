@@ -30,9 +30,9 @@
 
 const OWN_PROXY = ""; // e.g. "https://your-worker.workers.dev/?url=" — leave blank if you don't have one
 
-// Tried for text (small) responses — the arXiv Atom feed. Order doesn't
-// matter much here since all candidates (direct + these) race in parallel
-// and we just take whichever answers first.
+// Tried for text (small) responses — the arXiv Atom feed. These only get
+// hit at all if a direct fetch fails or is slow (see HEDGE_DELAY_MS below);
+// order doesn't matter much since whichever answers first wins.
 const TEXT_PROXIES = [
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -76,6 +76,22 @@ async function fetchWithTimeout(url, ms) {
   }
 }
 
+function wait(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function aggregateToError(aggregate, prefix) {
+  const reasons = (aggregate.errors || [aggregate]).map((e) => e.message).join(" | ");
+  return new Error(`${prefix} (${reasons || "all attempts failed"})`);
+}
+
+// How long direct gets to answer on its own before we also start racing the
+// proxies. Short enough that a genuinely stuck direct request doesn't stall
+// the UI, long enough to cover normal arXiv response times (typically well
+// under a second, occasionally a few seconds under load) without wastefully
+// opening proxy connections that usually won't even be needed.
+const HEDGE_DELAY_MS = 1200;
+
 /**
  * Fetch a URL that may not grant this origin CORS access, via a direct
  * attempt (optional) and a chain of CORS proxies.
@@ -84,24 +100,54 @@ async function fetchWithTimeout(url, ms) {
  */
 export async function corsFetch(targetUrl, { as = "text", tryDirect = false, timeoutMs } = {}) {
   if (as === "text") {
-    const proxies = ownProxyFirst(TEXT_PROXIES);
-    const candidates = tryDirect ? [targetUrl, ...proxies.map((p) => p(targetUrl))] : proxies.map((p) => p(targetUrl));
     const ms = timeoutMs || 9000;
-
-    // Small payloads: fire requests at every candidate in parallel and take
-    // whichever one answers first, instead of waiting on dead ones in turn.
-    const attempts = candidates.map((url) =>
+    const attempt = (url) =>
       fetchWithTimeout(url, ms)
         .then((res) => res.text())
         .catch((err) => {
           throw new Error(`${hostOf(url)}: ${err.message}`);
-        })
+        });
+
+    const proxyUrls = ownProxyFirst(TEXT_PROXIES).map((p) => p(targetUrl));
+
+    if (!tryDirect) {
+      // No direct-CORS path available — race the proxies in parallel as
+      // before, since there's nothing to hedge against.
+      try {
+        return await Promise.any(proxyUrls.map(attempt));
+      } catch (aggregate) {
+        throw aggregateToError(aggregate, "Couldn't reach arXiv via any route");
+      }
+    }
+
+    // Hedged: fire the direct request alone first. Only also start racing
+    // the proxies once HEDGE_DELAY_MS has passed *or* direct has already
+    // failed (whichever comes first) — so the common case (direct just
+    // works) makes exactly one network request instead of four.
+    let directSettled = false;
+    const directAttempt = attempt(targetUrl).finally(() => {
+      directSettled = true;
+    });
+    const trigger = Promise.race([wait(HEDGE_DELAY_MS), directAttempt.catch(() => {})]);
+    const hedgedProxies = proxyUrls.map((url) =>
+      trigger.then(() => {
+        if (directSettled) {
+          // directAttempt already resolved by the time our trigger fired —
+          // check if it actually succeeded by racing against it; if so,
+          // skip this proxy call entirely rather than wasting a request.
+          return directAttempt.then(
+            () => Promise.reject(new Error(`${hostOf(url)}: skipped, direct already answered`)),
+            () => attempt(url) // direct failed — go ahead and try this proxy
+          );
+        }
+        return attempt(url); // direct still pending past the hedge window — try in parallel
+      })
     );
+
     try {
-      return await Promise.any(attempts);
+      return await Promise.any([directAttempt, ...hedgedProxies]);
     } catch (aggregate) {
-      const reasons = (aggregate.errors || []).map((e) => e.message).join(" | ");
-      throw new Error(`Couldn't reach arXiv via any route (${reasons || "all attempts failed"})`);
+      throw aggregateToError(aggregate, "Couldn't reach arXiv via any route");
     }
   }
 
