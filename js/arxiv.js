@@ -22,7 +22,12 @@ async function throttledFetch(url) {
     await wait(MIN_GAP_MS - elapsed);
   }
   lastRequestAt = Date.now();
-  return corsFetch(url, { as: "text" });
+  // export.arxiv.org has sent Access-Control-Allow-Origin: * since 2014, so
+  // a direct fetch works for almost everyone and is both faster and far more
+  // reliable than routing every list/search through third-party proxies.
+  // tryDirect races a direct attempt alongside the proxy fallbacks and takes
+  // whichever answers first, so this only ever helps.
+  return corsFetch(url, { as: "text", tryDirect: true });
 }
 
 function text(node, tag) {
