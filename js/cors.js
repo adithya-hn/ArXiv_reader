@@ -23,9 +23,15 @@
 //       if (!target) return new Response("missing url", { status: 400, headers: cors });
 //       try {
 //         const upstream = await fetch(target);
-//         const res = new Response(upstream.body, upstream);
-//         Object.entries(cors).forEach(([k, v]) => res.headers.set(k, v));
-//         return res;
+//         const headers = new Headers(upstream.headers);
+//         // Workers auto-decompresses the upstream body but leaves the
+//         // original Content-Encoding/Content-Length headers in place,
+//         // which corrupts binary downloads (e.g. PDFs) on the client —
+//         // strip both so the browser reads the plain bytes we send.
+//         headers.delete("content-encoding");
+//         headers.delete("content-length");
+//         Object.entries(cors).forEach(([k, v]) => headers.set(k, v));
+//         return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
 //       } catch (err) {
 //         return new Response("upstream fetch failed: " + err.message, { status: 502, headers: cors });
 //       }
