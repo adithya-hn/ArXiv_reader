@@ -6,49 +6,54 @@
 //
 // This is the one real limitation of a no-backend PWA talking to arXiv.
 // Free public proxies change their terms/limits without notice, which is
-// the most common cause of "PDF won't load" in apps like this one. If you
-// run into that again, the durable fix is OWN_PROXY below: deploy a
-// one-file Cloudflare Worker (free tier) that just forwards requests to
-// arXiv with the right headers, then paste its URL in OWN_PROXY — it gets
-// tried first, ahead of every public proxy.
+// the most common cause of "PDF won't load" in apps like this one — as of
+// this writing all three below are degraded in one way or another. The
+// durable fix is OWN_PROXY: deploy a one-file Cloudflare Worker (free
+// tier, no card required) that just forwards requests to arXiv with the
+// right headers, then paste its URL below — it gets tried first, ahead of
+// every public proxy.
 //
-// Example Worker (Cloudflare Workers, free tier, no account limits that
-// matter here):
+// Worker code (paste into the Cloudflare dashboard's Worker editor):
 //
 //   export default {
-//     async fetch(req) {
-//       const target = new URL(req.url).searchParams.get("url");
-//       if (!target) return new Response("missing url", { status: 400 });
-//       const upstream = await fetch(target);
-//       const res = new Response(upstream.body, upstream);
-//       res.headers.set("Access-Control-Allow-Origin", "*");
-//       return res;
+//     async fetch(request) {
+//       const target = new URL(request.url).searchParams.get("url");
+//       const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS" };
+//       if (request.method === "OPTIONS") return new Response(null, { headers: cors });
+//       if (!target) return new Response("missing url", { status: 400, headers: cors });
+//       try {
+//         const upstream = await fetch(target);
+//         const res = new Response(upstream.body, upstream);
+//         Object.entries(cors).forEach(([k, v]) => res.headers.set(k, v));
+//         return res;
+//       } catch (err) {
+//         return new Response("upstream fetch failed: " + err.message, { status: 502, headers: cors });
+//       }
 //     }
 //   };
 //
 // Then set: const OWN_PROXY = "https://your-worker.workers.dev/?url=";
 
-const OWN_PROXY = ""; // e.g. "https://your-worker.workers.dev/?url=" — leave blank if you don't have one
+const OWN_PROXY = "https://arxiv-proxy.adithyabhattsringeri.workers.dev/?url=";
 
 // Tried for text (small) responses — the arXiv Atom feed. These only get
 // hit at all if a direct fetch fails or is slow (see HEDGE_DELAY_MS below);
 // order doesn't matter much since whichever answers first wins.
 const TEXT_PROXIES = [
+  (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
 ];
 
-// Tried for blob (PDF) responses, in order, one at a time. codetabs is
-// listed first because it explicitly supports binary/image payloads and has
-// a generous 5MB/request limit. corsproxy.io is last because its free tier
-// now restricts itself to text-based content types and a small handful of
-// allowed origins, so it's the least likely of the three to hand back a
-// usable PDF — but it's free and occasionally still works, so it stays as
-// a last resort rather than being removed outright.
+// Tried for blob (PDF) responses, in order, one at a time. None of these
+// three is reliably good at binary downloads on its free tier right now —
+// allorigins is rate-limited under load, corsproxy.io's free tier doesn't
+// proxy binary content at all (text formats only — binary is a paid
+// feature), and codetabs has been returning blanket HTTP 400s. They're
+// kept as a last-ditch fallback chain, but OWN_PROXY above is the real fix.
 const BLOB_PROXIES = [
-  (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
 ];
 
