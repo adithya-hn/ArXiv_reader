@@ -173,6 +173,10 @@ export function closeReader() {
   state = null;
 }
 
+function withTimeout(promise, ms, message) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))]);
+}
+
 async function renderAllPages() {
   const container = el("reader-pages");
   const targetCssWidth = Math.min(container.clientWidth || 900, 980);
@@ -198,10 +202,6 @@ async function renderAllPages() {
     pdfCanvas.style.width = viewport.width + "px";
     pdfCanvas.style.height = viewport.height + "px";
 
-    const ctx = pdfCanvas.getContext("2d");
-    ctx.scale(dpr, dpr);
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
     const inkCanvas = document.createElement("canvas");
     inkCanvas.className = "ink-canvas";
     inkCanvas.width = viewport.width * dpr;
@@ -209,12 +209,25 @@ async function renderAllPages() {
     inkCanvas.style.width = viewport.width + "px";
     inkCanvas.style.height = viewport.height + "px";
 
+    // Append the page now, before rendering — so the reader never sits on a
+    // blank screen waiting on a slow render call. The page (with its cream
+    // background) shows immediately and fills in once render() finishes.
     wrapper.appendChild(pdfCanvas);
     wrapper.appendChild(inkCanvas);
     container.appendChild(wrapper);
 
     redrawPage(n, inkCanvas);
     attachPointerHandlers(inkCanvas, n);
+
+    const ctx = pdfCanvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    try {
+      await withTimeout(page.render({ canvasContext: ctx, viewport }).promise, 15000, `page ${n} render timed out`);
+    } catch (err) {
+      // One bad/stuck page shouldn't block the rest of the document from
+      // showing — log it and move on instead of hanging the whole loop.
+      console.error("Daily arXiv: page render failed", n, err);
+    }
   }
 
   el("reader-page-indicator").textContent = `1 / ${state.pdf.numPages}`;
