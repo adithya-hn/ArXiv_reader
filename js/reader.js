@@ -46,24 +46,59 @@ function el(id) {
 }
 
 /**
+ * Sanity-checks that a blob is actually a usable PDF — catches a CORS proxy
+ * handing back an HTML error page, a truncated download, or bytes that got
+ * corrupted in transit (e.g. a stale Content-Encoding header lying about
+ * whether the body was already decompressed). Real PDFs always start with
+ * the 5-byte "%PDF-" signature.
+ */
+async function looksLikePdf(blob) {
+  if (!blob || blob.size < 2000) return false;
+  try {
+    const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+    return String.fromCharCode(...head) === "%PDF-";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Downloads a paper's PDF and caches it for offline reading + annotation.
  * Throws if the network/CORS prevented caching; caller should fall back to
  * a plain external link in that case.
  */
 export async function downloadPdf(paper) {
   const blob = await corsFetch(paper.pdfUrl, { as: "blob", tryDirect: true });
+  if (!(await looksLikePdf(blob))) {
+    throw new Error(`Downloaded file doesn't look like a real PDF (got ${blob.size} bytes) — the source likely returned an error page instead`);
+  }
   await db.savePdfBlob(paper.id, blob);
   return blob;
 }
 
 async function loadPdfDocument(paper) {
   let blob = await db.getPdfBlob(paper.id);
+  if (blob && !(await looksLikePdf(blob))) {
+    // Something broken got cached on an earlier attempt (e.g. before a
+    // proxy fix). Don't keep reusing garbage forever — drop it and fetch a
+    // fresh copy instead.
+    await db.deletePdfBlob(paper.id);
+    blob = null;
+  }
   if (!blob) {
     blob = await downloadPdf(paper); // throws if it can't be fetched (e.g. CORS)
   }
   const buf = await blob.arrayBuffer();
   const pdfjsLib = await getPdfjsLib();
-  return pdfjsLib.getDocument({ data: buf }).promise;
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  if (!pdf.numPages) {
+    // Parsed without throwing but produced an empty document — same root
+    // cause as above. Purge it and surface a real, visible error instead of
+    // silently leaving the reader blank.
+    await db.deletePdfBlob(paper.id);
+    throw new Error("PDF parsed but contained no pages — tap Read again to retry");
+  }
+  return pdf;
 }
 
 function fmtAuthors(authors) {
