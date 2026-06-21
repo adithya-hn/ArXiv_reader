@@ -122,12 +122,23 @@ export async function markDownloaded(id, downloaded) {
 // ---------- PDFs ----------
 
 export async function savePdfBlob(id, blob) {
-  await put("pdfs", blob, id);
+  // Safari/WebKit has a long-standing bug storing Blob objects directly in
+  // IndexedDB ("Error preparing Blob/File data to be stored in object
+  // store") — affects desktop Safari, iOS/iPadOS Safari, and any
+  // iOS/iPadOS browser (e.g. Chrome on iPad), since Apple requires all of
+  // them to use WebKit. Storing the raw bytes as an ArrayBuffer instead
+  // sidesteps it entirely; we rebuild a real Blob on read so nothing else
+  // in the app needs to know about this.
+  const buffer = await blob.arrayBuffer();
+  await put("pdfs", { buffer, type: blob.type || "application/pdf" }, id);
   await markDownloaded(id, true);
 }
 
 export async function getPdfBlob(id) {
-  return get("pdfs", id);
+  const stored = await get("pdfs", id);
+  if (!stored) return stored;
+  if (stored instanceof Blob) return stored; // backward-compat with anything saved before this fix
+  return new Blob([stored.buffer], { type: stored.type || "application/pdf" });
 }
 
 export async function hasPdfBlob(id) {
