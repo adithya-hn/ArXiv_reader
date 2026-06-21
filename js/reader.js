@@ -133,7 +133,12 @@ export async function openReader(paper) {
   el("view-reader").classList.add("active");
   el("reader-title").textContent = paper.title;
   el("reader-byline").textContent = fmtAuthors(paper.authors);
-  el("reader-pages").innerHTML = "";
+  // reader-status and reader-fallback are permanent children of
+  // reader-pages (see index.html) — only remove previously-rendered PDF
+  // pages from a prior session, not the whole container, or those two
+  // elements get destroyed and every subsequent el() lookup for them
+  // returns null.
+  el("reader-pages").querySelectorAll(".pdf-page").forEach((p) => p.remove());
   el("reader-status").textContent = "Loading…";
   el("reader-status").hidden = false;
   el("reader-fallback").hidden = true;
