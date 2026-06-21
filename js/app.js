@@ -149,7 +149,12 @@ async function handleCardAction(action, id, container) {
 
   if (action === "read") {
     await db.saveLibraryPaper(paper);
-    openPaper(paper);
+    try {
+      await openPaper(paper);
+    } catch (err) {
+      console.error("Daily arXiv: couldn't open reader", err);
+      toast("Couldn't open the reader — see console for details");
+    }
     refreshCardActions(card, paper);
   }
 

@@ -108,6 +108,15 @@ function fmtAuthors(authors) {
 }
 
 export async function openReader(paper) {
+  const REQUIRED_IDS = ["view-reader", "reader-title", "reader-byline", "reader-pages", "reader-status", "reader-fallback", "reader-toolbar"];
+  const missing = REQUIRED_IDS.filter((id) => !el(id));
+  if (missing.length) {
+    // Fails loudly and specifically instead of a cryptic "Cannot set
+    // properties of null" — almost always means the deployed index.html
+    // doesn't match the deployed JS (e.g. a stale/partial upload).
+    throw new Error(`Reader UI elements missing from the page: ${missing.join(", ")} — check that index.html is fully up to date`);
+  }
+
   state = {
     paper,
     pdf: null,
