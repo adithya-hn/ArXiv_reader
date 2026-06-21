@@ -4,7 +4,7 @@
 // separately in IndexedDB (see js/db.js) — this worker only deals with the
 // files that make up the app itself.
 
-const CACHE_NAME = "daily-arxiv-shell-v2";
+const CACHE_NAME = "daily-arxiv-shell-v3";
 
 const SHELL_ASSETS = [
   "./",
@@ -22,6 +22,9 @@ const SHELL_ASSETS = [
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
 ];
+
+// These rarely change and benefit from instant cache-first loading.
+const STATIC_ASSETS = new Set(["./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png"]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -47,22 +50,32 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
+  const scopePath = new URL(self.registration.scope).pathname;
+  const path = "./" + url.pathname.slice(scopePath.length);
+
+  if (sameOrigin && STATIC_ASSETS.has(path)) {
+    // Rarely changes: cache-first is safe and fast.
+    event.respondWith(caches.match(req).then((cached) => cached || fetch(req)));
+    return;
+  }
 
   if (sameOrigin) {
-    // App shell: cache-first, refresh in the background.
+    // App code (HTML/CSS/JS): network-first. A cache-first-with-background-
+    // refresh strategy here meant every reload showed whatever was cached
+    // from the *previous* load — always one deploy behind, which made
+    // fixes look like they weren't taking effect. Network-first means a
+    // fresh deploy is visible on the very next reload, with the cache only
+    // used as an offline fallback.
     event.respondWith(
-      caches.match(req).then((cached) => {
-        const network = fetch(req)
-          .then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-            }
-            return res;
-          })
-          .catch(() => cached);
-        return cached || network;
-      })
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
     );
     return;
   }
