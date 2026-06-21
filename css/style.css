@@ -605,6 +605,7 @@ main {
 
 .pdf-page {
   position: relative;
+  flex-shrink: 0;
   box-shadow: 0 8px 24px var(--shadow);
   border-radius: 4px;
   overflow: hidden;
