@@ -110,10 +110,13 @@ async function renderPaperList(container, papers, { append = false } = {}) {
 }
 
 // Shared click handling for any container of paper cards.
-async function handleCardAction(action, id, container) {
-  const card = container.querySelector(`.paper-card[data-id="${CSS.escape(id)}"]`);
+async function handleCardAction(action, id, container, target) {
+  // toggle-abstract triggers from the title/abstract text itself, which
+  // never carried a data-id (only the action buttons did) — fall back to
+  // the nearest .paper-card ancestor so this doesn't silently no-op.
+  const card = container.querySelector(`.paper-card[data-id="${CSS.escape(id || "")}"]`) || target?.closest(".paper-card");
   if (action === "toggle-abstract") {
-    card.classList.toggle("expanded");
+    card?.classList.toggle("expanded");
     return;
   }
   const paper = await findPaperById(id);
@@ -497,7 +500,7 @@ function bindDelegatedClicks(containerId) {
   el(containerId).addEventListener("click", (e) => {
     const target = e.target.closest("[data-action]");
     if (!target) return;
-    handleCardAction(target.dataset.action, target.dataset.id, el(containerId));
+    handleCardAction(target.dataset.action, target.dataset.id, el(containerId), target);
   });
 }
 
