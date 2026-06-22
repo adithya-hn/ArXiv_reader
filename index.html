@@ -82,6 +82,10 @@
       <label class="btn btn-ghost" for="library-import-input">Import backup</label>
       <input type="file" accept="application/json" id="library-import-input" class="visually-hidden">
     </div>
+    <div class="backup-banner" id="library-backup-banner" hidden>
+      <span class="backup-banner-msg"></span>
+      <button class="btn btn-primary backup-banner-btn" id="library-backup-banner-btn">Export now</button>
+    </div>
     <div class="scroll-area">
       <div id="library-list"></div>
       <div class="empty-state" id="library-empty" hidden>
