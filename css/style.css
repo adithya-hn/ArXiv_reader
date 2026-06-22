@@ -383,7 +383,20 @@ main {
   padding: 12px 18px 4px;
 }
 
-.library-filter-chip {
+.backup-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px 10px;
+  padding: 11px 14px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.backup-banner-msg { flex: 1; opacity: 0.9; }
+.backup-banner-btn { flex-shrink: 0; font-size: 13px; padding: 7px 14px; }
   font-family: var(--font-mono);
   font-size: 12px;
   padding: 6px 12px;
@@ -619,7 +632,13 @@ main {
   display: block;
 }
 
-.ink-canvas { touch-action: pan-y; }
+.ink-canvas {
+  /* touch-action:none tells WebKit not to handle any gesture natively on
+     this element — without this, iPadOS intercepts Apple Pencil events for
+     scrolling even when JS calls preventDefault(). Finger scrolling is
+     re-implemented manually in reader.js so it still works. */
+  touch-action: none;
+}
 
 #reader-status, #reader-fallback {
   margin: auto;
