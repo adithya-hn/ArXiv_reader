@@ -183,6 +183,7 @@ export function closeReader() {
   if (state) {
     state.pageObservers.forEach((o) => o.disconnect());
   }
+  cancelMomentum();
   el("view-reader").classList.remove("active");
   state = null;
 }
@@ -276,15 +277,38 @@ function drawStroke(ctx, canvas, stroke) {
   ctx.restore();
 }
 
+// ---- touch-scroll state (finger in pencil-only mode) ----
+// Because the ink canvas sets touch-action:none to stop iPadOS from
+// treating Apple Pencil events as scroll gestures, we re-implement finger
+// scrolling manually here so it still works when finger-draw is off.
+const tScroll = { active: false, id: null, lastY: 0, vel: 0, lastT: 0, raf: null };
+
+function cancelMomentum() {
+  if (tScroll.raf) { cancelAnimationFrame(tScroll.raf); tScroll.raf = null; }
+}
+
+function startMomentum() {
+  const pagesEl = el("reader-pages");
+  cancelMomentum();
+  let v = tScroll.vel;
+  (function step() {
+    if (Math.abs(v) < 0.4) { tScroll.raf = null; return; }
+    pagesEl.scrollTop += v;
+    v *= 0.9;
+    tScroll.raf = requestAnimationFrame(step);
+  })();
+}
+// ----------------------------------------------------------
+
 function attachPointerHandlers(canvas, pageNum) {
-  canvas.addEventListener("pointerdown", (e) => onPointerDown(e, canvas, pageNum));
-  canvas.addEventListener("pointermove", (e) => onPointerMove(e, canvas, pageNum));
-  canvas.addEventListener("pointerup", (e) => onPointerEnd(e, canvas, pageNum));
+  canvas.addEventListener("pointerdown",   (e) => onPointerDown(e, canvas, pageNum));
+  canvas.addEventListener("pointermove",   (e) => onPointerMove(e, canvas, pageNum));
+  canvas.addEventListener("pointerup",     (e) => onPointerEnd(e, canvas, pageNum));
   canvas.addEventListener("pointercancel", (e) => onPointerEnd(e, canvas, pageNum));
 }
 
 function shouldDraw(e) {
-  if (e.pointerType === "pen") return true;
+  if (e.pointerType === "pen")   return true;
   if (e.pointerType === "mouse") return true;
   if (e.pointerType === "touch") return state.finger;
   return false;
@@ -293,11 +317,23 @@ function shouldDraw(e) {
 function pointFromEvent(e, canvas) {
   const rect = canvas.getBoundingClientRect();
   const x = (e.clientX - rect.left) / rect.width;
-  const y = (e.clientY - rect.top) / rect.height;
+  const y = (e.clientY - rect.top)  / rect.height;
   return { x, y, p: e.pressure || 0.5 };
 }
 
 function onPointerDown(e, canvas, pageNum) {
+  // Finger in pencil-only mode: take over scroll manually so pencil can
+  // never accidentally scroll (touch-action:none disables native scroll for
+  // ALL pointer types on this canvas, including pen, which is what we want).
+  if (e.pointerType === "touch" && !state.finger) {
+    cancelMomentum();
+    tScroll.active = true;
+    tScroll.id     = e.pointerId;
+    tScroll.lastY  = e.clientY;
+    tScroll.vel    = 0;
+    tScroll.lastT  = e.timeStamp;
+    return;
+  }
   if (!shouldDraw(e)) return;
   e.preventDefault();
   canvas.setPointerCapture(e.pointerId);
@@ -310,8 +346,8 @@ function onPointerDown(e, canvas, pageNum) {
 
   const cfg = TOOL_DEFAULTS[state.tool] || TOOL_DEFAULTS.pen;
   state.activeStroke = {
-    page: pageNum,
-    tool: state.tool,
+    page:  pageNum,
+    tool:  state.tool,
     color: state.color,
     width: cfg.width,
     alpha: cfg.alpha,
@@ -320,6 +356,19 @@ function onPointerDown(e, canvas, pageNum) {
 }
 
 function onPointerMove(e, canvas, pageNum) {
+  if (e.pointerType === "touch" && !state.finger) {
+    if (tScroll.active && tScroll.id === e.pointerId) {
+      const dy = e.clientY - tScroll.lastY;
+      const dt = e.timeStamp - tScroll.lastT;
+      // velocity in px/frame (assuming ~60 fps); negative because scrollTop
+      // increases when moving content upward
+      tScroll.vel   = dt > 0 ? (-dy / dt) * 16 : 0;
+      tScroll.lastY = e.clientY;
+      tScroll.lastT = e.timeStamp;
+      el("reader-pages").scrollTop -= dy;
+    }
+    return;
+  }
   if (!shouldDraw(e)) return;
   if (state.tool === "eraser" && state.erasing) {
     eraseNear(e, canvas, pageNum);
@@ -334,6 +383,14 @@ function onPointerMove(e, canvas, pageNum) {
 }
 
 function onPointerEnd(e, canvas, pageNum) {
+  if (e.pointerType === "touch" && !state.finger) {
+    if (tScroll.active && tScroll.id === e.pointerId) {
+      tScroll.active = false;
+      tScroll.id     = null;
+      startMomentum();
+    }
+    return;
+  }
   if (state.tool === "eraser") {
     if (state.erasing && state.erasing.removed.length) {
       state.undoStack.push({ type: "remove", page: pageNum, strokes: state.erasing.removed });

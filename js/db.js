@@ -194,7 +194,15 @@ export async function setFeedCache(key, entries) {
   return put("feedCache", { entries, fetchedAt: Date.now() }, key);
 }
 
-// ---------- Export / import (backup) ----------
+export async function getLastBackupAt() {
+  return get("settings", "lastBackupAt");
+}
+
+export async function setLastBackupAt() {
+  return put("settings", Date.now(), "lastBackupAt");
+}
+
+
 
 export async function exportLibraryJSON() {
   const [papers, settings] = await Promise.all([

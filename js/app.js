@@ -197,7 +197,7 @@ function cacheEntries(map, entries) {
 function switchTab(name) {
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
-  if (name === "library") renderLibrary();
+  if (name === "library") { renderLibrary(); updateBackupBanner(); }
 }
 
 // --------------------------------------------------------------- today ----
@@ -382,7 +382,30 @@ async function exportLibrary() {
   a.download = `daily-arxiv-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  toast("Library exported");
+  await db.setLastBackupAt();
+  updateBackupBanner();
+  toast("Library exported — keep this file somewhere safe");
+}
+
+async function updateBackupBanner() {
+  const banner = el("library-backup-banner");
+  if (!banner) return;
+  const papers = await db.getAllLibraryPapers();
+  if (!papers.length) { banner.hidden = true; return; }
+  const lastBackup = await db.getLastBackupAt();
+  const age = lastBackup ? (Date.now() - lastBackup) / (1000 * 60 * 60 * 24) : Infinity;
+  if (!lastBackup) {
+    banner.querySelector(".backup-banner-msg").textContent =
+      "You have saved papers — export a backup so they survive if browser data is cleared.";
+    banner.hidden = false;
+  } else if (age > 7) {
+    const days = Math.floor(age);
+    banner.querySelector(".backup-banner-msg").textContent =
+      `Last backup was ${days} day${days !== 1 ? "s" : ""} ago. Consider exporting a fresh one.`;
+    banner.hidden = false;
+  } else {
+    banner.hidden = true;
+  }
 }
 
 async function importLibrary(file) {
@@ -538,6 +561,7 @@ async function init() {
     });
   });
   el("library-export-btn").addEventListener("click", exportLibrary);
+  el("library-backup-banner-btn").addEventListener("click", exportLibrary);
   el("library-import-input").addEventListener("change", (e) => {
     if (e.target.files[0]) importLibrary(e.target.files[0]);
   });
